@@ -40,6 +40,21 @@ export type AlocacaoMEI = {
   meiId: string;
   valor: number;
   limite: number;
+  jaUsadoMes: number;
   disponivel: number;
-  saturado: boolean;
+  estouro: number; // quanto excedeu o limite
+  empresaIds: string[];
+};
+
+/* ---------- Revenda ---------- */
+export type ProdutoRevenda = {
+  id: string;
+  nome: string;
+};
+
+export type HistoricoRevendaMes = {
+  // mes no formato MM/AAAA
+  mes: string;
+  // vendas[empresaId][produtoRevendaId] = quantidade vendida
+  vendas: Record<string, Record<string, number>>;
 };
