@@ -2,6 +2,7 @@ import type {
   Empresa,
   HistoricoRevendaMes,
   MEI,
+  PedidosRevendaMes,
   Produto,
   ProdutoRevenda,
   Quantidades,
@@ -9,6 +10,7 @@ import type {
 
 const KEY = "remessa.v2";
 const LEGACY_KEY = "remessa.v1";
+export const MES_KEY = "remessa.mes";
 
 export type AppData = {
   produtos: Produto[];
@@ -25,18 +27,30 @@ export type AppData = {
   produtosRevenda: ProdutoRevenda[];
   /** histórico mensal de vendas de produtos de revenda por empresa */
   historicoRevenda: HistoricoRevendaMes[];
+  /** pedidos de revenda já pegos na fábrica, por mês e por tamanho */
+  pedidosRevenda: Record<string, PedidosRevendaMes>;
 };
 
-const uid = () => Math.random().toString(36).slice(2, 10);
+// IDs estáveis para SSR/client (evitam mismatch de hidratação)
+let _seq = 0;
+const uid = () => {
+  if (typeof window !== "undefined") {
+    return Math.random().toString(36).slice(2, 10);
+  }
+  _seq += 1;
+  return `s_${_seq.toString(36)}`;
+};
+
+const TAMS = ["P", "M", "G", "GG"];
 
 const defaults = (): AppData => {
-  const e1 = uid(), e2 = uid(), e3 = uid();
-  const m1 = uid(), m2 = uid();
+  const e1 = "e_cr", e2 = "e_rz", e3 = "e_co";
+  const m1 = "m_iani", m2 = "m_rafa";
   return {
     produtos: [
-      { id: uid(), nome: "Leggings", rendimento: 20, valor: 0.5 },
-      { id: uid(), nome: "Shorts", rendimento: 30, valor: 0.25 },
-      { id: uid(), nome: "Tops", rendimento: 60, valor: 0.1 },
+      { id: "p_leg", nome: "Leggings", rendimento: 20, valor: 0.5 },
+      { id: "p_sho", nome: "Shorts", rendimento: 30, valor: 0.25 },
+      { id: "p_top", nome: "Tops", rendimento: 60, valor: 0.1 },
     ],
     empresas: [
       { id: e1, nome: "CR Fitness" },
@@ -52,10 +66,11 @@ const defaults = (): AppData => {
     precoTecidoKg: 0,
     nomeTecido: "Suplex",
     produtosRevenda: [
-      { id: uid(), nome: "Samba canção" },
-      { id: uid(), nome: "Camisa térmica" },
+      { id: "pr_samba", nome: "Samba canção", tamanhos: [...TAMS] },
+      { id: "pr_term", nome: "Camisa térmica", tamanhos: [...TAMS] },
     ],
     historicoRevenda: [],
+    pedidosRevenda: {},
   };
 };
 
@@ -75,8 +90,11 @@ export const loadData = (): AppData => {
       meiPorEmpresa: parsed.meiPorEmpresa ?? {},
       precoTecidoKg: parsed.precoTecidoKg ?? 0,
       nomeTecido: parsed.nomeTecido ?? "Suplex",
-      produtosRevenda: parsed.produtosRevenda ?? base.produtosRevenda,
+      produtosRevenda: (parsed.produtosRevenda ?? base.produtosRevenda).map(
+        (p) => ({ ...p, tamanhos: p.tamanhos?.length ? p.tamanhos : [...TAMS] }),
+      ),
       historicoRevenda: parsed.historicoRevenda ?? [],
+      pedidosRevenda: parsed.pedidosRevenda ?? {},
     };
   } catch {
     return defaults();
@@ -89,3 +107,17 @@ export const saveData = (data: AppData) => {
 };
 
 export const newId = uid;
+
+/** Retorna o mês anterior a "MM/AAAA". */
+export const mesAnterior = (mes: string): string => {
+  const m = /^(\d{2})\/(\d{4})$/.exec(mes);
+  if (!m) return "";
+  let mm = parseInt(m[1], 10);
+  let yy = parseInt(m[2], 10);
+  mm -= 1;
+  if (mm <= 0) {
+    mm = 12;
+    yy -= 1;
+  }
+  return `${String(mm).padStart(2, "0")}/${yy}`;
+};
