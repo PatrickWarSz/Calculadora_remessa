@@ -821,48 +821,126 @@ function Revenda({
   update: (p: Partial<AppData>) => void;
   mes: string;
 }) {
-  const [mesRef, setMesRef] = useState<string>(
-    () => data.historicoRevenda[0]?.mes ?? "",
-  );
-  // pedido[produtoId] = quantidade que vou comprar (string)
-  const [pedido, setPedido] = useState<Record<string, string>>({});
+  const mesPrev = mesAnterior(mes);
+  const [mesRef, setMesRef] = useState<string>(mesPrev);
+
+  // ao mudar o mês do topo, reapontar para o mês anterior automaticamente
+  useEffect(() => {
+    setMesRef(mesPrev);
+  }, [mesPrev]);
 
   const historicoMes = data.historicoRevenda.find((h) => h.mes === mesRef);
-  const produtosUsados = listarProdutosRevendaUsados(
-    historicoMes,
-    data.produtosRevenda,
-  );
+  const pedidoMes: PedidosRevendaMes = data.pedidosRevenda[mes] ?? {};
 
-  const distribuicoes = useMemo(() => {
-    return produtosUsados.map((p) => {
-      const prop = proporcaoRevenda(historicoMes, p.id, data.empresas);
-      const totalQtd = parseInt((pedido[p.id] ?? "").replace(/\D/g, ""), 10) || 0;
-      const dist = distribuirRevenda(totalQtd, prop);
-      return { produto: p, prop, totalQtd, dist };
+  // produtos com qualquer venda no mês de referência
+  const produtosUsados = useMemo(() => {
+    if (!historicoMes) return [] as ProdutoRevenda[];
+    const usados = new Set<string>();
+    for (const e of Object.values(historicoMes.vendas)) {
+      for (const [pid, qtd] of Object.entries(e)) {
+        if (qtd > 0) usados.add(pid);
+      }
+    }
+    return data.produtosRevenda.filter((p) => usados.has(p.id));
+  }, [historicoMes, data.produtosRevenda]);
+
+  const setPedido = (produtoId: string, tamanho: string, val: string) => {
+    const v = parseInt(val.replace(/\D/g, ""), 10) || 0;
+    const prev = data.pedidosRevenda[mes] ?? {};
+    const prevProd = prev[produtoId] ?? {};
+    const nextProd: Record<string, number> = { ...prevProd, [tamanho]: v };
+    if (v === 0) delete nextProd[tamanho];
+    const nextMes: PedidosRevendaMes = { ...prev, [produtoId]: nextProd };
+    if (Object.keys(nextProd).length === 0) delete nextMes[produtoId];
+    update({
+      pedidosRevenda: { ...data.pedidosRevenda, [mes]: nextMes },
     });
-  }, [produtosUsados, historicoMes, data.empresas, pedido]);
+  };
+
+  type LinhaDist = {
+    produto: ProdutoRevenda;
+    /** somente empresas que venderam esse produto no mês de referência */
+    empresasFiltradas: { empresa: Empresa; qtdVendida: number; pct: number }[];
+    porTamanho: {
+      tamanho: string;
+      total: number;
+      // qtd por empresa, na mesma ordem de empresasFiltradas
+      alocacao: number[];
+    }[];
+    totalGeral: number;
+    /** total por empresa somando todos os tamanhos */
+    totalPorEmpresa: number[];
+  };
+
+  const linhas: LinhaDist[] = useMemo(() => {
+    return produtosUsados.map((p) => {
+      const prop = proporcaoRevenda(historicoMes, p.id, data.empresas).filter(
+        (x) => x.qtd > 0,
+      );
+      const empresasFiltradas = prop.map((x) => ({
+        empresa: data.empresas.find((e) => e.id === x.empresaId)!,
+        qtdVendida: x.qtd,
+        pct: x.pct,
+      }));
+      const porTamanho = (p.tamanhos.length ? p.tamanhos : ["único"]).map(
+        (t) => {
+          const total = pedidoMes[p.id]?.[t] ?? 0;
+          const alloc = distribuirRevenda(
+            total,
+            prop.map((x) => ({ empresaId: x.empresaId, pct: x.pct })),
+          );
+          return {
+            tamanho: t,
+            total,
+            alocacao: empresasFiltradas.map(
+              (ef) =>
+                alloc.find((a) => a.empresaId === ef.empresa.id)?.qtd ?? 0,
+            ),
+          };
+        },
+      );
+      const totalPorEmpresa = empresasFiltradas.map((_, i) =>
+        porTamanho.reduce((s, t) => s + t.alocacao[i], 0),
+      );
+      const totalGeral = porTamanho.reduce((s, t) => s + t.total, 0);
+      return { produto: p, empresasFiltradas, porTamanho, totalGeral, totalPorEmpresa };
+    });
+  }, [produtosUsados, historicoMes, data.empresas, pedidoMes]);
 
   const mensagem = useMemo(() => {
-    const linhas: string[] = [
-      `*Distribuição de revenda — pedidos ${mes}*`,
-      `Base: proporção do mês ${mesRef || "—"}`,
+    const linhasMsg: string[] = [
+      `*Distribuição de revenda — ${mes}*`,
+      `Base de proporção: ${mesRef || "—"}`,
       "",
     ];
-    distribuicoes
-      .filter((d) => d.totalQtd > 0)
-      .forEach((d) => {
-        linhas.push(`▸ ${d.produto.nome} — total ${fmtInt(d.totalQtd)}`);
-        d.dist.forEach((alloc, i) => {
-          const e = data.empresas.find((x) => x.id === alloc.empresaId)!;
-          const pct = d.prop[i].pct;
-          linhas.push(
-            `  ${e.nome}: ${fmtInt(alloc.qtd)} (${fmtPct(pct)})`,
-          );
-        });
-        linhas.push("");
+    linhas
+      .filter((l) => l.totalGeral > 0)
+      .forEach((l) => {
+        linhasMsg.push(
+          `▸ ${l.produto.nome} — total ${fmtInt(l.totalGeral)}`,
+        );
+        l.porTamanho
+          .filter((t) => t.total > 0)
+          .forEach((t) => {
+            const detalhe = l.empresasFiltradas
+              .map(
+                (ef, i) => `${ef.empresa.nome} ${fmtInt(t.alocacao[i])}`,
+              )
+              .join(" · ");
+            linhasMsg.push(`  ${t.tamanho}: ${fmtInt(t.total)} → ${detalhe}`);
+          });
+        linhasMsg.push(
+          `  Total por empresa: ${l.empresasFiltradas
+            .map(
+              (ef, i) =>
+                `${ef.empresa.nome} ${fmtInt(l.totalPorEmpresa[i])} (${fmtPct(ef.pct)})`,
+            )
+            .join(" · ")}`,
+          "",
+        );
       });
-    return linhas.join("\n");
-  }, [distribuicoes, mes, mesRef, data.empresas]);
+    return linhasMsg.join("\n");
+  }, [linhas, mes, mesRef]);
 
   const copyMsg = async () => {
     await navigator.clipboard.writeText(mensagem);
@@ -871,17 +949,16 @@ function Revenda({
 
   return (
     <div className="space-y-6">
-      {/* Histórico mensal */}
+      {/* Histórico mensal de vendas */}
       <Card className="p-5">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
-          <div>
-            <h3 className="font-semibold text-sm">Histórico de vendas de revenda</h3>
-            <p className="text-[11px] text-muted-foreground">
-              Registre as vendas do mês anterior por empresa. Essas quantidades
-              definem a proporção usada para distribuir os pedidos de nota
-              fiscal de revenda.
-            </p>
-          </div>
+        <div className="mb-4">
+          <h3 className="font-semibold text-sm">
+            Histórico de vendas de revenda
+          </h3>
+          <p className="text-[11px] text-muted-foreground">
+            Total vendido por empresa no mês (sem tamanho). Define a proporção
+            usada na distribuição dos pedidos do mês seguinte.
+          </p>
         </div>
 
         <HistoricoRevendaEditor
@@ -897,19 +974,19 @@ function Revenda({
       {/* Distribuição */}
       <Card className="p-5">
         <div className="flex items-end gap-3 mb-4 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[240px]">
             <h3 className="font-semibold text-sm">
-              Distribuir pedidos de nota fiscal
+              Distribuição por tamanho — pedidos de {mes || "—"}
             </h3>
             <p className="text-[11px] text-muted-foreground">
-              Informe quantas peças de cada produto você vai pedir agora. A
-              quantidade é dividida pelas empresas conforme a proporção do mês{" "}
-              <strong>{mesRef || "—"}</strong>.
+              Preencha quanto já pegou de cada tamanho na fábrica. A divisão
+              entre empresas usa a proporção do mês <strong>{mesRef || "—"}</strong>.
+              Apenas empresas que venderam o produto aparecem.
             </p>
           </div>
           <div className="w-40">
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Mês de referência
+              Base de proporção
             </Label>
             <Select value={mesRef} onValueChange={setMesRef}>
               <SelectTrigger className="h-9 num">
@@ -928,71 +1005,102 @@ function Revenda({
 
         {!historicoMes && (
           <p className="text-sm text-muted-foreground">
-            Cadastre um histórico mensal acima para liberar a distribuição.
+            Sem histórico para <strong>{mesRef || "—"}</strong>. Cadastre as
+            vendas acima para liberar a distribuição.
           </p>
         )}
 
         {historicoMes && produtosUsados.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Nenhum produto com vendas registradas no mês {mesRef}.
+            Nenhum produto com vendas registradas em {mesRef}.
           </p>
         )}
 
         {historicoMes && produtosUsados.length > 0 && (
-          <div className="space-y-4">
-            {distribuicoes.map((d) => (
+          <div className="space-y-5">
+            {linhas.map((l) => (
               <div
-                key={d.produto.id}
+                key={l.produto.id}
                 className="border border-border rounded-md overflow-hidden"
               >
-                <div className="grid grid-cols-[1fr_160px] gap-3 px-4 py-3 bg-surface-2 items-center">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-surface-2">
                   <div className="flex items-center gap-2">
                     <ShoppingBag className="size-4" />
-                    <span className="font-medium text-sm">{d.produto.nome}</span>
+                    <span className="font-medium text-sm">{l.produto.nome}</span>
                   </div>
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Vou pedir
-                    </Label>
-                    <Input
-                      inputMode="numeric"
-                      value={pedido[d.produto.id] ?? ""}
-                      onChange={(e) =>
-                        setPedido((p) => ({
-                          ...p,
-                          [d.produto.id]: e.target.value.replace(/\D/g, ""),
-                        }))
-                      }
-                      placeholder="0"
-                      className="h-8 num text-right"
-                    />
-                  </div>
+                  <span className="text-[11px] num text-muted-foreground">
+                    Total pego: <strong className="text-foreground">{fmtInt(l.totalGeral)}</strong>
+                  </span>
                 </div>
 
-                <div className="px-4 py-3 space-y-1.5">
-                  {d.prop.map((p, i) => {
-                    const e = data.empresas.find((x) => x.id === p.empresaId)!;
-                    const alloc = d.dist[i];
-                    return (
-                      <div
-                        key={p.empresaId}
-                        className="grid grid-cols-[1fr_70px_80px_90px] gap-2 items-center text-sm"
-                      >
-                        <span>{e.nome}</span>
-                        <span className="num text-right text-muted-foreground text-xs">
-                          {fmtInt(p.qtd)} vend.
-                        </span>
-                        <span className="num text-right text-xs text-muted-foreground">
-                          {fmtPct(p.pct)}
-                        </span>
-                        <span
-                          className={`num text-right font-semibold ${alloc.qtd > 0 ? "text-success" : "text-muted-foreground"}`}
-                        >
-                          {fmtInt(alloc.qtd)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-surface-2/40">
+                        <th className="text-left px-3 py-2 border-b border-border font-medium text-[10px] uppercase tracking-wider text-muted-foreground w-24">
+                          Tamanho
+                        </th>
+                        <th className="text-right px-3 py-2 border-b border-border font-medium text-[10px] uppercase tracking-wider text-muted-foreground w-28">
+                          Qtd pega
+                        </th>
+                        {l.empresasFiltradas.map((ef) => (
+                          <th
+                            key={ef.empresa.id}
+                            className="text-right px-3 py-2 border-b border-border font-medium text-[10px] uppercase tracking-wider text-muted-foreground"
+                          >
+                            {ef.empresa.nome}
+                            <div className="num text-[10px] text-muted-foreground/70 font-normal normal-case">
+                              {fmtPct(ef.pct)}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {l.porTamanho.map((t) => (
+                        <tr key={t.tamanho}>
+                          <td className="px-3 py-1.5 border-b border-border font-medium">
+                            {t.tamanho}
+                          </td>
+                          <td className="px-1.5 py-1 border-b border-border">
+                            <Input
+                              inputMode="numeric"
+                              value={String(t.total || "")}
+                              onChange={(e) =>
+                                setPedido(l.produto.id, t.tamanho, e.target.value)
+                              }
+                              placeholder="0"
+                              className="h-7 num text-right text-sm"
+                            />
+                          </td>
+                          {t.alocacao.map((q, i) => (
+                            <td
+                              key={i}
+                              className={`px-3 py-1.5 border-b border-border num text-right ${q > 0 ? "text-success font-semibold" : "text-muted-foreground"}`}
+                            >
+                              {q > 0 ? fmtInt(q) : "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      <tr className="bg-surface-2">
+                        <td className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
+                          Total
+                        </td>
+                        <td className="px-3 py-2 num text-right font-semibold">
+                          {fmtInt(l.totalGeral)}
+                        </td>
+                        {l.totalPorEmpresa.map((q, i) => (
+                          <td
+                            key={i}
+                            className="px-3 py-2 num text-right font-semibold text-success"
+                          >
+                            {fmtInt(q)}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             ))}
@@ -1106,7 +1214,7 @@ function HistoricoRevendaEditor({
           <Button size="sm" variant="outline" onClick={addMes}>
             <Plus className="size-3.5 mr-1" /> Mês
           </Button>
-          {mesSelecionado && (
+          {mesSelecionado && atual && (
             <Button
               size="sm"
               variant="ghost"
@@ -1121,7 +1229,7 @@ function HistoricoRevendaEditor({
 
       {!atual ? (
         <p className="text-sm text-muted-foreground">
-          Adicione um mês para começar a registrar vendas de revenda.
+          Sem histórico para esse mês. Use “Adicionar mês” para criar.
         </p>
       ) : produtosRevenda.length === 0 ? (
         <p className="text-sm text-muted-foreground">
