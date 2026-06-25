@@ -50,11 +50,17 @@ export type AlocacaoMEI = {
 export type ProdutoRevenda = {
   id: string;
   nome: string;
+  /** tamanhos comercializados (ex.: ["P","M","G","GG"]). Vazio = sem grade */
+  tamanhos: string[];
 };
 
 export type HistoricoRevendaMes = {
   // mes no formato MM/AAAA
   mes: string;
-  // vendas[empresaId][produtoRevendaId] = quantidade vendida
+  // vendas[empresaId][produtoRevendaId] = quantidade total vendida no mês (sem tamanho)
   vendas: Record<string, Record<string, number>>;
 };
+
+/** Pedidos de revenda em andamento, por mês.
+ *  pedidos[produtoId][tamanho] = quantidade já pega na fábrica */
+export type PedidosRevendaMes = Record<string, Record<string, number>>;
