@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppData } from "@/lib/storage";
-import { loadData, saveData, newId } from "@/lib/storage";
+import { loadData, saveData, newId, MES_KEY, mesAnterior } from "@/lib/storage";
 import {
   calcEmpresa,
   calcTotaisProduto,
@@ -10,13 +10,13 @@ import {
   fmtInt,
   fmtKg,
   fmtPct,
-  listarProdutosRevendaUsados,
   proporcaoRevenda,
 } from "@/lib/calc";
 import type {
   Empresa,
   HistoricoRevendaMes,
   MEI,
+  PedidosRevendaMes,
   Produto,
   ProdutoRevenda,
 } from "@/lib/types";
@@ -53,15 +53,30 @@ import { toast, Toaster } from "sonner";
 import jsPDF from "jspdf";
 
 export default function CalculadoraApp() {
+  // Inicializa com defaults estáveis (SSR) e carrega localStorage só no client
   const [data, setData] = useState<AppData>(() => loadData());
-  const [mes, setMes] = useState(() => {
-    const d = new Date();
-    return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-  });
+  const [mes, setMes] = useState("");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    saveData(data);
-  }, [data]);
+    setData(loadData());
+    const savedMes = window.localStorage.getItem(MES_KEY);
+    if (savedMes) {
+      setMes(savedMes);
+    } else {
+      const d = new Date();
+      setMes(`${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`);
+    }
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted) saveData(data);
+  }, [data, mounted]);
+
+  useEffect(() => {
+    if (mounted && mes) window.localStorage.setItem(MES_KEY, mes);
+  }, [mes, mounted]);
 
   const update = (patch: Partial<AppData>) => setData((d) => ({ ...d, ...patch }));
 
