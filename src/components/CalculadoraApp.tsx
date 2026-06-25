@@ -1679,9 +1679,12 @@ function ProdutosRevendaCard({
   setProdutos: (p: ProdutoRevenda[]) => void;
 }) {
   const add = () =>
-    setProdutos([...produtos, { id: newId(), nome: "Novo produto" }]);
-  const upd = (id: string, nome: string) =>
-    setProdutos(produtos.map((p) => (p.id === id ? { ...p, nome } : p)));
+    setProdutos([
+      ...produtos,
+      { id: newId(), nome: "Novo produto", tamanhos: ["P", "M", "G", "GG"] },
+    ]);
+  const upd = (id: string, patch: Partial<ProdutoRevenda>) =>
+    setProdutos(produtos.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   const del = (id: string) => setProdutos(produtos.filter((p) => p.id !== id));
 
   return (
@@ -1696,25 +1699,48 @@ function ProdutosRevendaCard({
         </Button>
       </div>
       <p className="text-[11px] text-muted-foreground mb-3">
-        Itens que você compra de terceiros (samba canção, camisa térmica, etc.)
-        e precisa pedir nota fiscal de revenda.
+        Itens comprados de terceiros. Os tamanhos definem as linhas da
+        distribuição por nota fiscal de revenda (ex.: <em>P, M, G, GG</em>).
       </p>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      <div className="grid sm:grid-cols-2 gap-3">
         {produtos.map((p) => (
-          <div key={p.id} className="flex gap-2">
-            <Input
-              value={p.nome}
-              onChange={(e) => upd(p.id, e.target.value)}
-              className="h-8 text-sm"
-            />
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => del(p.id)}
-              className="h-8 w-8 text-destructive shrink-0"
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+          <div
+            key={p.id}
+            className="space-y-2 p-3 rounded-md border border-border bg-surface-2"
+          >
+            <div className="flex gap-2">
+              <Input
+                value={p.nome}
+                onChange={(e) => upd(p.id, { nome: e.target.value })}
+                className="h-8 text-sm"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => del(p.id)}
+                className="h-8 w-8 text-destructive shrink-0"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Tamanhos (separados por vírgula)
+              </Label>
+              <Input
+                value={p.tamanhos.join(", ")}
+                onChange={(e) =>
+                  upd(p.id, {
+                    tamanhos: e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+                className="h-8 text-sm"
+                placeholder="P, M, G, GG"
+              />
+            </div>
           </div>
         ))}
       </div>
