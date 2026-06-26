@@ -24,6 +24,8 @@ export type AppData = {
   empresas: Empresa[];
   meis: MEI[];
   quantidades: Quantidades;
+  /** Arquivo histórico: quantidadesPorMes[mes] = Quantidades daquele mês */
+  quantidadesPorMes: Record<string, Quantidades>;
   meiPorEmpresa: Record<string, string>;
   precoTecidoKg: number;
   nomeTecido: string;
@@ -79,23 +81,20 @@ export const defaults = (): AppData => {
       { id: m1, nome: "Iani",   limiteMensal: 6750, jaUsadoMes: 0, ativo: true },
       { id: m2, nome: "Rafael", limiteMensal: 6750, jaUsadoMes: 0, ativo: true },
     ],
-    quantidades:    {},
-    meiPorEmpresa:  { [e1]: m1, [e2]: m2, [e3]: "", [e4]: "" },
-    precoTecidoKg:  0,
-    nomeTecido:     "Suplex",
+    quantidades:       {},
+    quantidadesPorMes: {},   // ← NOVO
+    meiPorEmpresa:     { [e1]: m1, [e2]: m2, [e3]: "", [e4]: "" },
+    precoTecidoKg:     0,
+    nomeTecido:        "Suplex",
     produtosRevenda,
-    fechamentos:    {},
+    fechamentos:       {},
     mapeamentoGrupo,
-    notasRevenda:   [],
+    notasRevenda:      [],
   };
 };
 
 // ─── Supabase I/O ─────────────────────────────────────────────────────────────
 
-/**
- * Carrega o estado completo do Supabase.
- * Retorna defaults se ainda não há dados salvos.
- */
 export const loadData = async (): Promise<{ appData: AppData; mesSalvo: string }> => {
   try {
     const { data, error } = await supabase
@@ -104,27 +103,25 @@ export const loadData = async (): Promise<{ appData: AppData; mesSalvo: string }
       .eq("id", ROW_ID)
       .single();
 
-    if (error || !data) {
-      return { appData: defaults(), mesSalvo: "" };
-    }
+    if (error || !data) return { appData: defaults(), mesSalvo: "" };
 
     const parsed = data.app_data as Partial<AppData>;
     const base   = defaults();
 
-    // Linha vazia (primeiro uso): retorna defaults limpos
     if (!parsed || Object.keys(parsed).length === 0) {
       return { appData: base, mesSalvo: data.mes_ativo ?? "" };
     }
 
     return {
       appData: {
-        produtos:      parsed.produtos  ?? base.produtos,
-        empresas:      parsed.empresas  ?? base.empresas,
-        meis:          parsed.meis      ?? base.meis,
-        quantidades:   parsed.quantidades   ?? {},
-        meiPorEmpresa: parsed.meiPorEmpresa ?? {},
-        precoTecidoKg: parsed.precoTecidoKg ?? 0,
-        nomeTecido:    parsed.nomeTecido    ?? "Suplex",
+        produtos:          parsed.produtos  ?? base.produtos,
+        empresas:          parsed.empresas  ?? base.empresas,
+        meis:              parsed.meis      ?? base.meis,
+        quantidades:       parsed.quantidades       ?? {},
+        quantidadesPorMes: parsed.quantidadesPorMes ?? {},   // ← NOVO
+        meiPorEmpresa:     parsed.meiPorEmpresa     ?? {},
+        precoTecidoKg:     parsed.precoTecidoKg     ?? 0,
+        nomeTecido:        parsed.nomeTecido        ?? "Suplex",
         produtosRevenda: (parsed.produtosRevenda ?? base.produtosRevenda).map((p) => ({
           ...p,
           tamanhos: p.tamanhos?.length ? p.tamanhos : [...TAMS],
@@ -141,10 +138,6 @@ export const loadData = async (): Promise<{ appData: AppData; mesSalvo: string }
   }
 };
 
-/**
- * Persiste o estado completo + mês ativo no Supabase.
- * Fire-and-forget: erros são logados mas não propagados.
- */
 export const saveData = async (data: AppData, mes: string): Promise<void> => {
   try {
     const { error } = await supabase.from("remessa_state").upsert({
@@ -159,7 +152,7 @@ export const saveData = async (data: AppData, mes: string): Promise<void> => {
   }
 };
 
-// ─── Helpers (inalterados) ────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export const newId = uid;
 

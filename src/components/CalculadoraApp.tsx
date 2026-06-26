@@ -60,31 +60,56 @@ import {
 import { toast, Toaster } from "sonner";
 import jsPDF from "jspdf";
 
+// ─── Helpers formato de mês ───────────────────────────────────────────────────
+// "06/2026" → "2026-06"  (para input[type=month])
+const toHtmlMonth = (mes: string) => {
+  const m = /^(\d{2})\/(\d{4})$/.exec(mes);
+  return m ? `${m[2]}-${m[1]}` : "";
+};
+// "2026-06" → "06/2026"
+const fromHtmlMonth = (html: string) => {
+  const m = /^(\d{4})-(\d{2})$/.exec(html);
+  return m ? `${m[2]}/${m[1]}` : "";
+};
+
 export default function CalculadoraApp() {
   const [data, setData] = useState<AppData>(defaults);
   const [mes, setMes] = useState("");
   const [mounted, setMounted] = useState(false);
 
+  // Carrega do Supabase no mount
   useEffect(() => {
-  loadData().then(({ appData, mesSalvo }) => {
-    setData(appData);
-    if (mesSalvo) {
-      setMes(mesSalvo);
-    } else {
-      const d = new Date();
-      setMes(`${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`);
-    }
-    setMounted(true);
-  });
-}, []);
+    loadData().then(({ appData, mesSalvo }) => {
+      setData(appData);
+      if (mesSalvo) {
+        setMes(mesSalvo);
+      } else {
+        const d = new Date();
+        setMes(`${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`);
+      }
+      setMounted(true);
+    });
+  }, []);
 
+  // Salva com debounce de 800ms para não hammear o Supabase a cada tecla
   const saveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-useEffect(() => {
-  if (!mounted) return;
-  if (saveRef.current) clearTimeout(saveRef.current);
-  saveRef.current = setTimeout(() => { saveData(data, mes); }, 800);
-  return () => { if (saveRef.current) clearTimeout(saveRef.current); };
-}, [data, mes, mounted]);
+  useEffect(() => {
+    if (!mounted) return;
+    if (saveRef.current) clearTimeout(saveRef.current);
+    saveRef.current = setTimeout(() => { saveData(data, mes); }, 800);
+    return () => { if (saveRef.current) clearTimeout(saveRef.current); };
+  }, [data, mes, mounted]);
+
+  // Troca de mês: persiste quantidades do mês atual → carrega do novo (ou limpa)
+  const handleMesChange = (novoMes: string) => {
+    if (!novoMes || novoMes === mes) return;
+    setData(d => ({
+      ...d,
+      quantidadesPorMes: { ...d.quantidadesPorMes, [mes]: d.quantidades },
+      quantidades: d.quantidadesPorMes[novoMes] ?? {},
+    }));
+    setMes(novoMes);
+  };
 
   const update = (patch: Partial<AppData>) => setData((d) => ({ ...d, ...patch }));
 
@@ -119,12 +144,12 @@ useEffect(() => {
               <Label htmlFor="mes" className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                 Mês ativo
               </Label>
-              <Input
+              <input
                 id="mes"
-                value={mes}
-                onChange={(e) => setMes(e.target.value)}
-                placeholder="MM/AAAA"
-                className="w-32 num text-center"
+                type="month"
+                value={toHtmlMonth(mes)}
+                onChange={(e) => handleMesChange(fromHtmlMonth(e.target.value))}
+                className="flex h-9 w-36 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring num"
               />
             </div>
           </div>
@@ -247,7 +272,10 @@ function FechamentoTab({
       }
       novasQtds[empresa.id] = linhaQtd;
     }
-    update({ quantidades: novasQtds });
+    update({
+      quantidades: novasQtds,
+      quantidadesPorMes: { ...data.quantidadesPorMes, [mes]: novasQtds },
+    });
     toast.success(`Quantidades aplicadas à Remessa de ${mes}`);
   };
 
@@ -502,7 +530,13 @@ function Calculadora({
   const setMeiEmpresa = (empresaId: string, meiId: string) => {
     update({ meiPorEmpresa: { ...data.meiPorEmpresa, [empresaId]: meiId === "__none__" ? "" : meiId } });
   };
-  const limpar = () => { update({ quantidades: {} }); toast.success("Quantidades zeradas"); };
+  const limpar = () => {
+    update({
+      quantidades: {},
+      quantidadesPorMes: { ...data.quantidadesPorMes, [mes]: {} },
+    });
+    toast.success("Quantidades zeradas");
+  };
 
   const exportarPdf = () => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
