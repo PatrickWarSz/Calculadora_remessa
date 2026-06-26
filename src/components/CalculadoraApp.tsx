@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData } from "@/lib/storage";
-import { loadData, saveData, newId, MES_KEY, mesAnterior } from "@/lib/storage";
+import { loadData, saveData, newId, mesAnterior, defaults } from "@/lib/storage";
 import {
   calcEmpresa,
   calcTotaisProduto,
@@ -61,23 +61,30 @@ import { toast, Toaster } from "sonner";
 import jsPDF from "jspdf";
 
 export default function CalculadoraApp() {
-  const [data, setData] = useState<AppData>(() => loadData());
+  const [data, setData] = useState<AppData>(defaults);
   const [mes, setMes] = useState("");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setData(loadData());
-    const savedMes = window.localStorage.getItem(MES_KEY);
-    if (savedMes) setMes(savedMes);
-    else {
+  loadData().then(({ appData, mesSalvo }) => {
+    setData(appData);
+    if (mesSalvo) {
+      setMes(mesSalvo);
+    } else {
       const d = new Date();
       setMes(`${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`);
     }
     setMounted(true);
-  }, []);
+  });
+}, []);
 
-  useEffect(() => { if (mounted) saveData(data); }, [data, mounted]);
-  useEffect(() => { if (mounted && mes) window.localStorage.setItem(MES_KEY, mes); }, [mes, mounted]);
+  const saveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+useEffect(() => {
+  if (!mounted) return;
+  if (saveRef.current) clearTimeout(saveRef.current);
+  saveRef.current = setTimeout(() => { saveData(data, mes); }, 800);
+  return () => { if (saveRef.current) clearTimeout(saveRef.current); };
+}, [data, mes, mounted]);
 
   const update = (patch: Partial<AppData>) => setData((d) => ({ ...d, ...patch }));
 
