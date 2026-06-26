@@ -3,32 +3,29 @@ export type Produto = {
   nome: string;
   rendimento: number; // peças por kg
   valor: number; // R$ por peça
+  /** Nome canônico do GRUPO no relatório do ERP (ex.: "LEGGING"). Usado p/ auto-mapeamento. */
+  grupoCanonico?: string;
 };
 
 export type Empresa = {
   id: string;
   nome: string;
   cnpj?: string;
+  /** apelidos para casar com nomes nas planilhas do ERP (case-insensitive) */
+  apelidos?: string[];
 };
 
 export type MEI = {
   id: string;
   nome: string;
-  limiteMensal: number; // R$
-  jaUsadoMes: number; // R$ já faturado no mês corrente
+  limiteMensal: number;
+  jaUsadoMes: number;
   ativo: boolean;
 };
 
 export type Quantidades = Record<string, Record<string, string>>;
-// quantidades[empresaId][produtoId] = "1234"
 
-export type ItemCalculo = {
-  produtoId: string;
-  qtd: number;
-  kg: number;
-  valor: number;
-};
-
+export type ItemCalculo = { produtoId: string; qtd: number; kg: number; valor: number };
 export type ResumoEmpresa = {
   empresaId: string;
   itens: ItemCalculo[];
@@ -42,7 +39,7 @@ export type AlocacaoMEI = {
   limite: number;
   jaUsadoMes: number;
   disponivel: number;
-  estouro: number; // quanto excedeu o limite
+  estouro: number;
   empresaIds: string[];
 };
 
@@ -50,17 +47,45 @@ export type AlocacaoMEI = {
 export type ProdutoRevenda = {
   id: string;
   nome: string;
-  /** tamanhos comercializados (ex.: ["P","M","G","GG"]). Vazio = sem grade */
   tamanhos: string[];
+  grupoCanonico?: string;
 };
 
-export type HistoricoRevendaMes = {
-  // mes no formato MM/AAAA
+/* ---------- Fechamento mensal (vindo das planilhas) ---------- */
+export type VendaItem = {
+  /** total da empresa no mês para esse produto */
+  total: number;
+  /** breakdown por tamanho (quando detectado) */
+  porTamanho: Record<string, number>;
+};
+
+export type Fechamento = {
+  /** "MM/AAAA" */
   mes: string;
-  // vendas[empresaId][produtoRevendaId] = quantidade total vendida no mês (sem tamanho)
-  vendas: Record<string, Record<string, number>>;
+  /** vendas[empresaId][produtoId] = VendaItem */
+  vendas: Record<string, Record<string, VendaItem>>;
+  /** timestamp do último import por empresa */
+  importadoEm: Record<string, number>;
+  /** linhas com grupo desconhecido (preserva pra você revisar) */
+  pendentes: Record<string, { grupo: string; descricao: string; qtd: number }[]>;
 };
 
-/** Pedidos de revenda em andamento, por mês.
- *  pedidos[produtoId][tamanho] = quantidade já pega na fábrica */
-export type PedidosRevendaMes = Record<string, Record<string, number>>;
+/* ---------- Notas de balcão de revenda ---------- */
+export type NotaRevenda = {
+  id: string;
+  /** "MM/AAAA" — mês em que a nota foi pega */
+  mes: string;
+  /** ISO date */
+  data: string;
+  produtoId: string;
+  /** qtd pega por tamanho */
+  porTamanho: Record<string, number>;
+  /** mês usado como base de proporção */
+  baseMes: string;
+  /** distribuição final: [empresaId][tamanho] = qtd */
+  distribuicao: Record<string, Record<string, number>>;
+  observacao?: string;
+};
+
+/** Mapeamento Grupo (ERP) -> produto cadastrado. Pode apontar pra produto próprio OU revenda. */
+export type MapeamentoGrupo = Record<string, string>;
