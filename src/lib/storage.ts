@@ -1,15 +1,16 @@
 import type {
   Empresa,
-  HistoricoRevendaMes,
+  Fechamento,
+  MapeamentoGrupo,
   MEI,
-  PedidosRevendaMes,
+  NotaRevenda,
   Produto,
   ProdutoRevenda,
   Quantidades,
 } from "./types";
 
-const KEY = "remessa.v2";
-const LEGACY_KEY = "remessa.v1";
+const KEY = "remessa.v3";
+const LEGACY_KEYS = ["remessa.v2", "remessa.v1"];
 export const MES_KEY = "remessa.mes";
 
 export type AppData = {
@@ -17,26 +18,21 @@ export type AppData = {
   empresas: Empresa[];
   meis: MEI[];
   quantidades: Quantidades;
-  /** mapeamento manual empresaId -> meiId ("" = não atribuído) */
   meiPorEmpresa: Record<string, string>;
-  /** preço por kg do tecido (insumo único, genérico) */
   precoTecidoKg: number;
-  /** nome do tecido só para exibir nas mensagens / PDF */
   nomeTecido: string;
-  /** produtos comprados de terceiros (revenda) */
   produtosRevenda: ProdutoRevenda[];
-  /** histórico mensal de vendas de produtos de revenda por empresa */
-  historicoRevenda: HistoricoRevendaMes[];
-  /** pedidos de revenda já pegos na fábrica, por mês e por tamanho */
-  pedidosRevenda: Record<string, PedidosRevendaMes>;
+  /** fechamentos[mes] */
+  fechamentos: Record<string, Fechamento>;
+  /** mapeamento canônico Grupo -> produtoId (próprio ou revenda) */
+  mapeamentoGrupo: MapeamentoGrupo;
+  /** notas de balcão de revenda */
+  notasRevenda: NotaRevenda[];
 };
 
-// IDs estáveis para SSR/client (evitam mismatch de hidratação)
 let _seq = 0;
 const uid = () => {
-  if (typeof window !== "undefined") {
-    return Math.random().toString(36).slice(2, 10);
-  }
+  if (typeof window !== "undefined") return Math.random().toString(36).slice(2, 10);
   _seq += 1;
   return `s_${_seq.toString(36)}`;
 };
@@ -44,41 +40,56 @@ const uid = () => {
 const TAMS = ["P", "M", "G", "GG"];
 
 const defaults = (): AppData => {
-  const e1 = "e_cr", e2 = "e_rz", e3 = "e_co";
+  const e1 = "e_cr", e2 = "e_rz", e3 = "e_co", e4 = "e_rc";
   const m1 = "m_iani", m2 = "m_rafa";
+  const produtos: Produto[] = [
+    { id: "p_leg", nome: "Leggings", rendimento: 20, valor: 0.5, grupoCanonico: "LEGGING" },
+    { id: "p_sho", nome: "Shorts", rendimento: 30, valor: 0.25, grupoCanonico: "SHORT" },
+    { id: "p_top", nome: "Tops", rendimento: 60, valor: 0.1, grupoCanonico: "TOP" },
+    { id: "p_mqi", nome: "Macaquinhos", rendimento: 15, valor: 0.7, grupoCanonico: "MACAQUINHO" },
+    { id: "p_mca", nome: "Macacões", rendimento: 10, valor: 0.9, grupoCanonico: "MACACAO" },
+    { id: "p_cal", nome: "Calcinhas", rendimento: 80, valor: 0.08, grupoCanonico: "CALCINHA" },
+    { id: "p_biq", nome: "Biquinis", rendimento: 40, valor: 0.4, grupoCanonico: "BIQUINI" },
+  ];
+  const produtosRevenda: ProdutoRevenda[] = [
+    { id: "pr_samba", nome: "Samba canção", tamanhos: [...TAMS], grupoCanonico: "SAMBA CANCAO" },
+    { id: "pr_term", nome: "Camisa térmica", tamanhos: [...TAMS], grupoCanonico: "CAMISA TERMICA" },
+  ];
+  const mapeamentoGrupo: MapeamentoGrupo = {};
+  for (const p of produtos) if (p.grupoCanonico) mapeamentoGrupo[p.grupoCanonico] = p.id;
+  for (const p of produtosRevenda) if (p.grupoCanonico) mapeamentoGrupo[p.grupoCanonico] = p.id;
+
   return {
-    produtos: [
-      { id: "p_leg", nome: "Leggings", rendimento: 20, valor: 0.5 },
-      { id: "p_sho", nome: "Shorts", rendimento: 30, valor: 0.25 },
-      { id: "p_top", nome: "Tops", rendimento: 60, valor: 0.1 },
-    ],
+    produtos,
     empresas: [
-      { id: e1, nome: "CR Fitness" },
-      { id: e2, nome: "Rezende Fitness" },
-      { id: e3, nome: "Costa Fitness" },
+      { id: e1, nome: "CR Fitness", apelidos: ["cr"] },
+      { id: e2, nome: "Rezende Fitness", apelidos: ["rezende"] },
+      { id: e3, nome: "Costa Fitness", apelidos: ["costa"] },
+      { id: e4, nome: "RC Fitness", apelidos: ["rc"] },
     ],
     meis: [
       { id: m1, nome: "Iani", limiteMensal: 6750, jaUsadoMes: 0, ativo: true },
       { id: m2, nome: "Rafael", limiteMensal: 6750, jaUsadoMes: 0, ativo: true },
     ],
     quantidades: {},
-    meiPorEmpresa: { [e1]: m1, [e2]: m2, [e3]: "" },
+    meiPorEmpresa: { [e1]: m1, [e2]: m2, [e3]: "", [e4]: "" },
     precoTecidoKg: 0,
     nomeTecido: "Suplex",
-    produtosRevenda: [
-      { id: "pr_samba", nome: "Samba canção", tamanhos: [...TAMS] },
-      { id: "pr_term", nome: "Camisa térmica", tamanhos: [...TAMS] },
-    ],
-    historicoRevenda: [],
-    pedidosRevenda: {},
+    produtosRevenda,
+    fechamentos: {},
+    mapeamentoGrupo,
+    notasRevenda: [],
   };
 };
 
 export const loadData = (): AppData => {
   if (typeof window === "undefined") return defaults();
   try {
-    const raw =
-      window.localStorage.getItem(KEY) ?? window.localStorage.getItem(LEGACY_KEY);
+    let raw = window.localStorage.getItem(KEY);
+    if (!raw) for (const k of LEGACY_KEYS) {
+      const v = window.localStorage.getItem(k);
+      if (v) { raw = v; break; }
+    }
     if (!raw) return defaults();
     const parsed = JSON.parse(raw) as Partial<AppData>;
     const base = defaults();
@@ -90,11 +101,13 @@ export const loadData = (): AppData => {
       meiPorEmpresa: parsed.meiPorEmpresa ?? {},
       precoTecidoKg: parsed.precoTecidoKg ?? 0,
       nomeTecido: parsed.nomeTecido ?? "Suplex",
-      produtosRevenda: (parsed.produtosRevenda ?? base.produtosRevenda).map(
-        (p) => ({ ...p, tamanhos: p.tamanhos?.length ? p.tamanhos : [...TAMS] }),
-      ),
-      historicoRevenda: parsed.historicoRevenda ?? [],
-      pedidosRevenda: parsed.pedidosRevenda ?? {},
+      produtosRevenda: (parsed.produtosRevenda ?? base.produtosRevenda).map((p) => ({
+        ...p,
+        tamanhos: p.tamanhos?.length ? p.tamanhos : [...TAMS],
+      })),
+      fechamentos: parsed.fechamentos ?? {},
+      mapeamentoGrupo: { ...base.mapeamentoGrupo, ...(parsed.mapeamentoGrupo ?? {}) },
+      notasRevenda: parsed.notasRevenda ?? [],
     };
   } catch {
     return defaults();
@@ -108,16 +121,12 @@ export const saveData = (data: AppData) => {
 
 export const newId = uid;
 
-/** Retorna o mês anterior a "MM/AAAA". */
 export const mesAnterior = (mes: string): string => {
   const m = /^(\d{2})\/(\d{4})$/.exec(mes);
   if (!m) return "";
   let mm = parseInt(m[1], 10);
   let yy = parseInt(m[2], 10);
   mm -= 1;
-  if (mm <= 0) {
-    mm = 12;
-    yy -= 1;
-  }
+  if (mm <= 0) { mm = 12; yy -= 1; }
   return `${String(mm).padStart(2, "0")}/${yy}`;
 };
