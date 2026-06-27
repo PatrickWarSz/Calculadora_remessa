@@ -692,6 +692,25 @@ function Calculadora({
         );
       })}
 
+      <Card className="p-4 border-dashed">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Plus className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Adicionar remessa extra</span>
+          <span className="text-[11px] text-muted-foreground flex-1 min-w-[160px]">
+            Para industrializações avulsas no mesmo mês (meio/fim de mês).
+          </span>
+          <Select value="" onValueChange={(v) => addExtra(v)}>
+            <SelectTrigger className="h-8 w-56 text-sm"><SelectValue placeholder="Selecionar empresa…" /></SelectTrigger>
+            <SelectContent>
+              {data.empresas.map((e) => (
+                <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Card className="p-5">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total KG · {data.nomeTecido}</p>
