@@ -526,12 +526,30 @@ type ResumoArr = ReturnType<typeof calcEmpresa>[];
 type DistMan = ReturnType<typeof distribuirMEIsManual>;
 
 function Calculadora({
-  data, update, resumos, totalKg, totalValor, totalTecido, porProduto, dist, mes,
+  data, update, empresas, resumos, totalKg, totalValor, totalTecido, porProduto, dist, mes,
 }: {
   data: AppData; update: (p: Partial<AppData>) => void;
+  empresas: Empresa[];
   resumos: ResumoArr; totalKg: number; totalValor: number; totalTecido: number;
   porProduto: ReturnType<typeof calcTotaisProduto>; dist: DistMan; mes: string;
 }) {
+  const extraIds = new Set((data.remessasExtras ?? []).map((x) => x.id));
+  const addExtra = (empresaBaseId: string) => {
+    if (!empresaBaseId) return;
+    const id = `ex_${Math.random().toString(36).slice(2, 10)}`;
+    update({ remessasExtras: [...(data.remessasExtras ?? []), { id, empresaBaseId }] });
+    toast.success("Remessa extra adicionada");
+  };
+  const removeExtra = (id: string) => {
+    const { [id]: _q, ...quantidades } = data.quantidades;
+    const { [id]: _m, ...meiPorEmpresa } = data.meiPorEmpresa;
+    update({
+      remessasExtras: (data.remessasExtras ?? []).filter((x) => x.id !== id),
+      quantidades,
+      meiPorEmpresa,
+    });
+    toast.success("Remessa extra removida");
+  };
   const setQtd = (empresaId: string, produtoId: string, val: string) => {
     const v = val.replace(/\D/g, "");
     update({
