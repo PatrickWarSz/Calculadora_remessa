@@ -574,7 +574,7 @@ function Calculadora({
     doc.text("Resumo de Remessa para Industrialização", m, y); y += 18;
     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
     doc.text(`Mês: ${mes}`, m, y); y += 22;
-    data.empresas.forEach((e, idx) => {
+    empresas.forEach((e, idx) => {
       const r = resumos[idx]; if (r.totalValor === 0) return;
       const meiNome = data.meis.find((x) => x.id === data.meiPorEmpresa[e.id])?.nome ?? "—";
       doc.setFont("helvetica", "bold"); doc.setFontSize(12);
