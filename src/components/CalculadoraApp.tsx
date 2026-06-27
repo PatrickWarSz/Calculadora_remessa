@@ -638,6 +638,11 @@ function Calculadora({
                     ))}
                   </SelectContent>
                 </Select>
+                {isExtra && (
+                  <Button variant="ghost" size="sm" onClick={() => removeExtra(empresa.id)} className="text-destructive h-8 px-2" title="Remover remessa extra">
+                    <X className="size-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
