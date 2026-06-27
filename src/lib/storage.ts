@@ -37,6 +37,8 @@ export type AppData = {
   mapeamentoGrupo: MapeamentoGrupo;
   /** notas de balcão de revenda */
   notasRevenda: NotaRevenda[];
+  /** remessas extras (industrializações adicionais no mesmo mês) */
+  remessasExtras: RemessaExtra[];
 };
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
