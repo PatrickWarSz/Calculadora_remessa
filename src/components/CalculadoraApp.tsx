@@ -113,17 +113,28 @@ export default function CalculadoraApp() {
 
   const update = (patch: Partial<AppData>) => setData((d) => ({ ...d, ...patch }));
 
+  // Lista expandida: empresas base + remessas extras (virtuais)
+  const empresasCalc = useMemo(() => {
+    const extras = (data.remessasExtras ?? []).map((ex) => {
+      const base = data.empresas.find((e) => e.id === ex.empresaBaseId);
+      return base
+        ? { id: ex.id, nome: `${base.nome} (extra${ex.rotulo ? ` · ${ex.rotulo}` : ""})`, cnpj: base.cnpj, apelidos: base.apelidos }
+        : null;
+    }).filter(Boolean) as typeof data.empresas;
+    return [...data.empresas, ...extras];
+  }, [data.empresas, data.remessasExtras]);
+
   const resumos = useMemo(
-    () => data.empresas.map((e) => calcEmpresa(e, data.produtos, data.quantidades)),
-    [data.empresas, data.produtos, data.quantidades],
+    () => empresasCalc.map((e) => calcEmpresa(e, data.produtos, data.quantidades)),
+    [empresasCalc, data.produtos, data.quantidades],
   );
   const totalKg = resumos.reduce((s, r) => s + r.totalKg, 0);
   const totalValor = resumos.reduce((s, r) => s + r.totalValor, 0);
   const totalTecido = totalKg * data.precoTecidoKg;
   const porProduto = calcTotaisProduto(data.produtos, resumos);
   const dist = useMemo(
-    () => distribuirMEIsManual(data.empresas, resumos, data.meiPorEmpresa, data.meis),
-    [data.empresas, resumos, data.meiPorEmpresa, data.meis],
+    () => distribuirMEIsManual(empresasCalc, resumos, data.meiPorEmpresa, data.meis),
+    [empresasCalc, resumos, data.meiPorEmpresa, data.meis],
   );
 
   return (
