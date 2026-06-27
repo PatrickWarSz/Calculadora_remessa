@@ -186,7 +186,7 @@ export default function CalculadoraApp() {
 
           <TabsContent value="calc" className="space-y-6">
             <Calculadora
-              data={data} update={update}
+              data={data} update={update} empresas={empresasCalc}
               resumos={resumos} totalKg={totalKg} totalValor={totalValor}
               totalTecido={totalTecido} porProduto={porProduto} dist={dist} mes={mes}
             />
@@ -194,7 +194,7 @@ export default function CalculadoraApp() {
 
           <TabsContent value="msg">
             <Mensagens
-              data={data} resumos={resumos} porProduto={porProduto}
+              data={data} empresas={empresasCalc} resumos={resumos} porProduto={porProduto}
               totalValor={totalValor} totalKg={totalKg} totalTecido={totalTecido}
               dist={dist} mes={mes}
             />
