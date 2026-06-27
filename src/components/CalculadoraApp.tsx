@@ -56,6 +56,7 @@ import {
   Trash2,
   Upload,
   Users,
+  X,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import jsPDF from "jspdf";
