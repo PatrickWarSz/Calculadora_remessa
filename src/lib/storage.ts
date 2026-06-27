@@ -133,6 +133,7 @@ export const loadData = async (): Promise<{ appData: AppData; mesSalvo: string }
         fechamentos:     parsed.fechamentos    ?? {},
         mapeamentoGrupo: { ...base.mapeamentoGrupo, ...(parsed.mapeamentoGrupo ?? {}) },
         notasRevenda:    parsed.notasRevenda   ?? [],
+        remessasExtras:  parsed.remessasExtras ?? [],
       },
       mesSalvo: data.mes_ativo ?? "",
     };
