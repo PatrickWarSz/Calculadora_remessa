@@ -782,9 +782,10 @@ function Calculadora({
    MENSAGENS
 ============================================================ */
 function Mensagens({
-  data, resumos, porProduto, totalValor, totalKg, totalTecido, dist, mes,
+  data, empresas, resumos, porProduto, totalValor, totalKg, totalTecido, dist, mes,
 }: {
-  data: AppData; resumos: ResumoArr; porProduto: ReturnType<typeof calcTotaisProduto>;
+  data: AppData; empresas: Empresa[];
+  resumos: ResumoArr; porProduto: ReturnType<typeof calcTotaisProduto>;
   totalValor: number; totalKg: number; totalTecido: number; dist: DistMan; mes: string;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
