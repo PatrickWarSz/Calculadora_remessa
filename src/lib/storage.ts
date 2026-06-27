@@ -8,6 +8,7 @@ import type {
   Produto,
   ProdutoRevenda,
   Quantidades,
+  RemessaExtra,
 } from "./types";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
