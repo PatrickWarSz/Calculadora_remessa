@@ -8,6 +8,7 @@ import type {
   Produto,
   ProdutoRevenda,
   Quantidades,
+  RemessaExtra,
 } from "./types";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -36,6 +37,8 @@ export type AppData = {
   mapeamentoGrupo: MapeamentoGrupo;
   /** notas de balcão de revenda */
   notasRevenda: NotaRevenda[];
+  /** remessas extras (industrializações adicionais no mesmo mês) */
+  remessasExtras: RemessaExtra[];
 };
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
@@ -90,6 +93,7 @@ export const defaults = (): AppData => {
     fechamentos:       {},
     mapeamentoGrupo,
     notasRevenda:      [],
+    remessasExtras:    [],
   };
 };
 
@@ -129,6 +133,7 @@ export const loadData = async (): Promise<{ appData: AppData; mesSalvo: string }
         fechamentos:     parsed.fechamentos    ?? {},
         mapeamentoGrupo: { ...base.mapeamentoGrupo, ...(parsed.mapeamentoGrupo ?? {}) },
         notasRevenda:    parsed.notasRevenda   ?? [],
+        remessasExtras:  parsed.remessasExtras ?? [],
       },
       mesSalvo: data.mes_ativo ?? "",
     };

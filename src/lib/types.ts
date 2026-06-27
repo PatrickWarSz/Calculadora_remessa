@@ -25,6 +25,13 @@ export type MEI = {
 
 export type Quantidades = Record<string, Record<string, string>>;
 
+/** Remessa extra: instância adicional de uma empresa no mesmo mês (industrialização avulsa). */
+export type RemessaExtra = {
+  id: string;          // id único usado como chave em quantidades e meiPorEmpresa
+  empresaBaseId: string;
+  rotulo?: string;     // opcional, ex.: "fim de mês"
+};
+
 export type ItemCalculo = { produtoId: string; qtd: number; kg: number; valor: number };
 export type ResumoEmpresa = {
   empresaId: string;

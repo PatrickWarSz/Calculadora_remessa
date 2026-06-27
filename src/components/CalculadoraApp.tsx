@@ -56,6 +56,7 @@ import {
   Trash2,
   Upload,
   Users,
+  X,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import jsPDF from "jspdf";
@@ -113,17 +114,28 @@ export default function CalculadoraApp() {
 
   const update = (patch: Partial<AppData>) => setData((d) => ({ ...d, ...patch }));
 
+  // Lista expandida: empresas base + remessas extras (virtuais)
+  const empresasCalc = useMemo(() => {
+    const extras = (data.remessasExtras ?? []).map((ex) => {
+      const base = data.empresas.find((e) => e.id === ex.empresaBaseId);
+      return base
+        ? { id: ex.id, nome: `${base.nome} (extra${ex.rotulo ? ` · ${ex.rotulo}` : ""})`, cnpj: base.cnpj, apelidos: base.apelidos }
+        : null;
+    }).filter(Boolean) as typeof data.empresas;
+    return [...data.empresas, ...extras];
+  }, [data.empresas, data.remessasExtras]);
+
   const resumos = useMemo(
-    () => data.empresas.map((e) => calcEmpresa(e, data.produtos, data.quantidades)),
-    [data.empresas, data.produtos, data.quantidades],
+    () => empresasCalc.map((e) => calcEmpresa(e, data.produtos, data.quantidades)),
+    [empresasCalc, data.produtos, data.quantidades],
   );
   const totalKg = resumos.reduce((s, r) => s + r.totalKg, 0);
   const totalValor = resumos.reduce((s, r) => s + r.totalValor, 0);
   const totalTecido = totalKg * data.precoTecidoKg;
   const porProduto = calcTotaisProduto(data.produtos, resumos);
   const dist = useMemo(
-    () => distribuirMEIsManual(data.empresas, resumos, data.meiPorEmpresa, data.meis),
-    [data.empresas, resumos, data.meiPorEmpresa, data.meis],
+    () => distribuirMEIsManual(empresasCalc, resumos, data.meiPorEmpresa, data.meis),
+    [empresasCalc, resumos, data.meiPorEmpresa, data.meis],
   );
 
   return (
@@ -175,7 +187,7 @@ export default function CalculadoraApp() {
 
           <TabsContent value="calc" className="space-y-6">
             <Calculadora
-              data={data} update={update}
+              data={data} update={update} empresas={empresasCalc}
               resumos={resumos} totalKg={totalKg} totalValor={totalValor}
               totalTecido={totalTecido} porProduto={porProduto} dist={dist} mes={mes}
             />
@@ -183,7 +195,7 @@ export default function CalculadoraApp() {
 
           <TabsContent value="msg">
             <Mensagens
-              data={data} resumos={resumos} porProduto={porProduto}
+              data={data} empresas={empresasCalc} resumos={resumos} porProduto={porProduto}
               totalValor={totalValor} totalKg={totalKg} totalTecido={totalTecido}
               dist={dist} mes={mes}
             />
@@ -515,12 +527,30 @@ type ResumoArr = ReturnType<typeof calcEmpresa>[];
 type DistMan = ReturnType<typeof distribuirMEIsManual>;
 
 function Calculadora({
-  data, update, resumos, totalKg, totalValor, totalTecido, porProduto, dist, mes,
+  data, update, empresas, resumos, totalKg, totalValor, totalTecido, porProduto, dist, mes,
 }: {
   data: AppData; update: (p: Partial<AppData>) => void;
+  empresas: Empresa[];
   resumos: ResumoArr; totalKg: number; totalValor: number; totalTecido: number;
   porProduto: ReturnType<typeof calcTotaisProduto>; dist: DistMan; mes: string;
 }) {
+  const extraIds = new Set((data.remessasExtras ?? []).map((x) => x.id));
+  const addExtra = (empresaBaseId: string) => {
+    if (!empresaBaseId) return;
+    const id = `ex_${Math.random().toString(36).slice(2, 10)}`;
+    update({ remessasExtras: [...(data.remessasExtras ?? []), { id, empresaBaseId }] });
+    toast.success("Remessa extra adicionada");
+  };
+  const removeExtra = (id: string) => {
+    const { [id]: _q, ...quantidades } = data.quantidades;
+    const { [id]: _m, ...meiPorEmpresa } = data.meiPorEmpresa;
+    update({
+      remessasExtras: (data.remessasExtras ?? []).filter((x) => x.id !== id),
+      quantidades,
+      meiPorEmpresa,
+    });
+    toast.success("Remessa extra removida");
+  };
   const setQtd = (empresaId: string, produtoId: string, val: string) => {
     const v = val.replace(/\D/g, "");
     update({
@@ -545,7 +575,7 @@ function Calculadora({
     doc.text("Resumo de Remessa para Industrialização", m, y); y += 18;
     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
     doc.text(`Mês: ${mes}`, m, y); y += 22;
-    data.empresas.forEach((e, idx) => {
+    empresas.forEach((e, idx) => {
       const r = resumos[idx]; if (r.totalValor === 0) return;
       const meiNome = data.meis.find((x) => x.id === data.meiPorEmpresa[e.id])?.nome ?? "—";
       doc.setFont("helvetica", "bold"); doc.setFontSize(12);
@@ -584,7 +614,8 @@ function Calculadora({
         </div>
       </div>
 
-      {data.empresas.map((empresa, idx) => {
+      {empresas.map((empresa, idx) => {
+        const isExtra = extraIds.has(empresa.id);
         const r = resumos[idx];
         const meiId = data.meiPorEmpresa[empresa.id] ?? "";
         return (
@@ -608,6 +639,11 @@ function Calculadora({
                     ))}
                   </SelectContent>
                 </Select>
+                {isExtra && (
+                  <Button variant="ghost" size="sm" onClick={() => removeExtra(empresa.id)} className="text-destructive h-8 px-2" title="Remover remessa extra">
+                    <X className="size-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -656,6 +692,25 @@ function Calculadora({
         );
       })}
 
+      <Card className="p-4 border-dashed">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Plus className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Adicionar remessa extra</span>
+          <span className="text-[11px] text-muted-foreground flex-1 min-w-[160px]">
+            Para industrializações avulsas no mesmo mês (meio/fim de mês).
+          </span>
+          <Select value="" onValueChange={(v) => addExtra(v)}>
+            <SelectTrigger className="h-8 w-56 text-sm"><SelectValue placeholder="Selecionar empresa…" /></SelectTrigger>
+            <SelectContent>
+              {data.empresas.map((e) => (
+                <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Card className="p-5">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total KG · {data.nomeTecido}</p>
@@ -695,7 +750,7 @@ function Calculadora({
               const totalUso = a.jaUsadoMes + a.valor;
               const pct = a.limite > 0 ? Math.min(100, (totalUso / a.limite) * 100) : 0;
               const pctUsado = a.limite > 0 ? (a.jaUsadoMes / a.limite) * 100 : 0;
-              const empresasNomes = a.empresaIds.map((id) => data.empresas.find((e) => e.id === id)?.nome).filter(Boolean).join(", ");
+              const empresasNomes = a.empresaIds.map((id) => empresas.find((e) => e.id === id)?.nome).filter(Boolean).join(", ");
               return (
                 <div key={a.meiId} className="space-y-1">
                   <div className="flex justify-between text-sm">
@@ -727,9 +782,10 @@ function Calculadora({
    MENSAGENS
 ============================================================ */
 function Mensagens({
-  data, resumos, porProduto, totalValor, totalKg, totalTecido, dist, mes,
+  data, empresas, resumos, porProduto, totalValor, totalKg, totalTecido, dist, mes,
 }: {
-  data: AppData; resumos: ResumoArr; porProduto: ReturnType<typeof calcTotaisProduto>;
+  data: AppData; empresas: Empresa[];
+  resumos: ResumoArr; porProduto: ReturnType<typeof calcTotaisProduto>;
   totalValor: number; totalKg: number; totalTecido: number; dist: DistMan; mes: string;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
@@ -748,8 +804,8 @@ function Mensagens({
     const blocos: string[] = [`*${mei.nome} — Remessa ${mes}*`, ""];
     let kgMei = 0;
     a.empresaIds.forEach((eid) => {
-      const e = data.empresas.find((x) => x.id === eid)!;
-      const idx = data.empresas.findIndex((x) => x.id === eid);
+      const e = empresas.find((x) => x.id === eid)!;
+      const idx = empresas.findIndex((x) => x.id === eid);
       const r = resumos[idx];
       blocos.push(`▸ ${e.nome}`);
       r.itens.filter((it) => it.qtd > 0).forEach((it) => {
