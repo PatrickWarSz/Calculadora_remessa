@@ -613,7 +613,8 @@ function Calculadora({
         </div>
       </div>
 
-      {data.empresas.map((empresa, idx) => {
+      {empresas.map((empresa, idx) => {
+        const isExtra = extraIds.has(empresa.id);
         const r = resumos[idx];
         const meiId = data.meiPorEmpresa[empresa.id] ?? "";
         return (
