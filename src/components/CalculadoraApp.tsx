@@ -804,8 +804,8 @@ function Mensagens({
     const blocos: string[] = [`*${mei.nome} — Remessa ${mes}*`, ""];
     let kgMei = 0;
     a.empresaIds.forEach((eid) => {
-      const e = data.empresas.find((x) => x.id === eid)!;
-      const idx = data.empresas.findIndex((x) => x.id === eid);
+      const e = empresas.find((x) => x.id === eid)!;
+      const idx = empresas.findIndex((x) => x.id === eid);
       const r = resumos[idx];
       blocos.push(`▸ ${e.nome}`);
       r.itens.filter((it) => it.qtd > 0).forEach((it) => {
