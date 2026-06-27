@@ -750,7 +750,7 @@ function Calculadora({
               const totalUso = a.jaUsadoMes + a.valor;
               const pct = a.limite > 0 ? Math.min(100, (totalUso / a.limite) * 100) : 0;
               const pctUsado = a.limite > 0 ? (a.jaUsadoMes / a.limite) * 100 : 0;
-              const empresasNomes = a.empresaIds.map((id) => data.empresas.find((e) => e.id === id)?.nome).filter(Boolean).join(", ");
+              const empresasNomes = a.empresaIds.map((id) => empresas.find((e) => e.id === id)?.nome).filter(Boolean).join(", ");
               return (
                 <div key={a.meiId} className="space-y-1">
                   <div className="flex justify-between text-sm">
