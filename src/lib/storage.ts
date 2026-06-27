@@ -93,6 +93,7 @@ export const defaults = (): AppData => {
     fechamentos:       {},
     mapeamentoGrupo,
     notasRevenda:      [],
+    remessasExtras:    [],
   };
 };
 
