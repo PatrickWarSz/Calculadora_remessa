@@ -152,16 +152,29 @@ export default function CalculadoraApp() {
           </div>
           <div className="flex items-end gap-3">
             <div>
-              <Label htmlFor="mes" className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <Label className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                 Mês ativo
               </Label>
-              <input
-                id="mes"
-                type="month"
-                value={toHtmlMonth(mes)}
-                onChange={(e) => handleMesChange(fromHtmlMonth(e.target.value))}
-                className="flex h-9 w-36 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring num"
-              />
+              <Select value={mes} onValueChange={handleMesChange}>
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="Selecione o mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {useMemo(() => {
+                    const hoje = new Date();
+                    const meses: string[] = [];
+                    for (let i = -12; i <= 6; i++) {
+                      const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+                      meses.push(`${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`);
+                    }
+                    return [...new Set(meses)].reverse();
+                  }, []).map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
