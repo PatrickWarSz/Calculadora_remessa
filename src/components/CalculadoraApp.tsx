@@ -144,26 +144,35 @@ export default function CalculadoraApp() {
               <Label className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                 Mês ativo
               </Label>
-              <Select value={mes} onValueChange={handleMesChange}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Selecione o mês" />
-                </SelectTrigger>
-                <SelectContent>
-                  {useMemo(() => {
-                    const hoje = new Date();
-                    const meses: string[] = [];
-                    for (let i = -12; i <= 6; i++) {
-                      const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
-                      meses.push(`${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`);
-                    }
-                    return [...new Set(meses)].reverse();
-                  }, []).map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const [mesStr, anoStr] = mes.split("/");
+                    const d = new Date(Number(anoStr), Number(mesStr) - 2, 1);
+                    const novo = `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                    handleMesChange(novo);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface-2 text-sm font-medium hover:bg-surface-3 active:scale-95 transition"
+                >
+                  −
+                </button>
+                <span className="inline-flex h-9 w-24 items-center justify-center rounded-md border border-border bg-surface-1 px-3 text-sm font-medium tracking-wide">
+                  {mes}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const [mesStr, anoStr] = mes.split("/");
+                    const d = new Date(Number(anoStr), Number(mesStr), 1);
+                    const novo = `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                    handleMesChange(novo);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface-2 text-sm font-medium hover:bg-surface-3 active:scale-95 transition"
+                >
+                  +
+                </button>
+              </div>
             </div>
           </div>
         </div>
