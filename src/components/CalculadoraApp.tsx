@@ -244,15 +244,6 @@ function FechamentoTab({
     }
   };
 
-  const handleFile = async (file: File) => {
-    const empresa = detectarEmpresa(file.name, data.empresas);
-    if (!empresa) {
-      toast.error(`Não identifiquei a empresa do arquivo "${file.name}". Use o botão da empresa correta.`);
-      return;
-    }
-    await handleImport(empresa.id, file);
-  };
-
   const limparFechamento = () => {
     if (!confirm(`Apagar fechamento de ${mes}?`)) return;
     const next = { ...data.fechamentos };
