@@ -362,9 +362,7 @@ function FechamentoTab({
           )}
         </div>
 
-        <DropZone onFiles={async (files) => { for (const f of files) await handleFile(f); }} />
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
           {data.empresas.map((e) => {
             const importedAt = fechamento?.importadoEm[e.id];
             const vendas = fechamento?.vendas[e.id] ?? {};
