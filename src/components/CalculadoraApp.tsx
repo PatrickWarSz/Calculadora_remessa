@@ -60,17 +60,6 @@ import {
 import { toast, Toaster } from "sonner";
 import jsPDF from "jspdf";
 
-// ─── Helpers formato de mês ───────────────────────────────────────────────────
-// "06/2026" → "2026-06"  (para input[type=month])
-const toHtmlMonth = (mes: string) => {
-  const m = /^(\d{2})\/(\d{4})$/.exec(mes);
-  return m ? `${m[2]}-${m[1]}` : "";
-};
-// "2026-06" → "06/2026"
-const fromHtmlMonth = (html: string) => {
-  const m = /^(\d{4})-(\d{2})$/.exec(html);
-  return m ? `${m[2]}/${m[1]}` : "";
-};
 
 export default function CalculadoraApp() {
   const [data, setData] = useState<AppData>(defaults);
