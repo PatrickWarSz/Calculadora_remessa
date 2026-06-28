@@ -15,7 +15,6 @@ import {
 import {
   agregarVendas,
   aplicarImportFechamento,
-  detectarEmpresa,
   lerPlanilhaVendas,
 } from "@/lib/xlsxImport";
 import type {
@@ -244,15 +243,6 @@ function FechamentoTab({
     }
   };
 
-  const handleFile = async (file: File) => {
-    const empresa = detectarEmpresa(file.name, data.empresas);
-    if (!empresa) {
-      toast.error(`Não identifiquei a empresa do arquivo "${file.name}". Use o botão da empresa correta.`);
-      return;
-    }
-    await handleImport(empresa.id, file);
-  };
-
   const limparFechamento = () => {
     if (!confirm(`Apagar fechamento de ${mes}?`)) return;
     const next = { ...data.fechamentos };
@@ -362,9 +352,7 @@ function FechamentoTab({
           )}
         </div>
 
-        <DropZone onFiles={async (files) => { for (const f of files) await handleFile(f); }} />
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
           {data.empresas.map((e) => {
             const importedAt = fechamento?.importadoEm[e.id];
             const vendas = fechamento?.vendas[e.id] ?? {};
@@ -484,41 +472,9 @@ function detectTam(desc: string): string | null {
   return m ? m[1].toUpperCase() : null;
 }
 
-function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [over, setOver] = useState(false);
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault(); setOver(false);
-        const files = Array.from(e.dataTransfer.files).filter((f) => /\.xlsx?$/i.test(f.name));
-        if (files.length) onFiles(files);
-      }}
-      onClick={() => inputRef.current?.click()}
-      className={`cursor-pointer rounded-md border-2 border-dashed p-6 text-center transition ${
-        over ? "border-success bg-success/5" : "border-border bg-surface-2"
-      }`}
-    >
-      <Upload className="size-5 mx-auto text-muted-foreground mb-1" />
-      <p className="text-sm">Arraste os .xls aqui ou clique para selecionar</p>
-      <p className="text-[11px] text-muted-foreground">Vários arquivos de uma vez — eu detecto a empresa pelo nome</p>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept=".xls,.xlsx"
-        className="hidden"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (files.length) onFiles(files);
-          e.target.value = "";
-        }}
-      />
-    </div>
-  );
-}
+/* ============================================================
+   REMESSA (antiga Calculadora) — mantém comportamento manual
+   ============================================================ */
 
 /* ============================================================
    REMESSA (antiga Calculadora) — mantém comportamento manual
