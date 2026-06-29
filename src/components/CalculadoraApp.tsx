@@ -192,7 +192,7 @@ export default function CalculadoraApp() {
           </TabsList>
 
           <TabsContent value="fech" className="space-y-6">
-            <FechamentoTab data={data} update={update} mes={mes} />
+            <FechamentoTab data={data} update={update} mes={mesAnterior(mes)} />
           </TabsContent>
 
           <TabsContent value="calc" className="space-y-6">
