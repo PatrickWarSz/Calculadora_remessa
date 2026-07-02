@@ -930,13 +930,16 @@ function Revenda({
         )}
       </Card>
 
-      {baseFech && proporcoesUsadas.length > 0 && (
+      <VendidoVsPego data={data} mes={mes} acumulado={acumulado} />
+
+      {data.produtosRevenda.length > 0 && (
         <NovaNotaForm
           data={data}
           update={update}
           mes={mes}
           baseMes={baseMes}
-          proporcoes={proporcoesUsadas}
+          proporcoes={proporcoes}
+          acumulado={acumulado}
         />
       )}
 
