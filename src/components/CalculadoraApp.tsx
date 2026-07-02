@@ -1384,8 +1384,8 @@ function ProdutosRevendaCard({ produtos, setProdutos }: { produtos: ProdutoReven
 }
 
 function ProdutoRevendaItem({ produto, onChange, onDelete }: { produto: ProdutoRevenda; onChange: (patch: Partial<ProdutoRevenda>) => void; onDelete: () => void }) {
-  const [tamText, setTamText] = React.useState(produto.tamanhos.join(", "));
-  React.useEffect(() => { setTamText(produto.tamanhos.join(", ")); }, [produto.id]);
+  const [tamText, setTamText] = useState(produto.tamanhos.join(", "));
+  useEffect(() => { setTamText(produto.tamanhos.join(", ")); }, [produto.id]);
   const commitTam = () => {
     const arr = tamText.split(",").map((s) => s.trim()).filter(Boolean);
     onChange({ tamanhos: arr });
