@@ -1376,23 +1376,7 @@ function ProdutosRevendaCard({ produtos, setProdutos }: { produtos: ProdutoReven
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {produtos.map((p) => (
-          <div key={p.id} className="space-y-2 p-3 rounded-md border border-border bg-surface-2">
-            <div className="flex gap-2">
-              <Input value={p.nome} onChange={(e) => upd(p.id, { nome: e.target.value })} className="h-8 text-sm" />
-              <Button size="icon" variant="ghost" onClick={() => del(p.id)} className="h-8 w-8 text-destructive shrink-0"><Trash2 className="size-3.5" /></Button>
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Tamanhos</Label>
-              <Input value={p.tamanhos.join(", ")}
-                onChange={(e) => upd(p.id, { tamanhos: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
-                className="h-8 text-sm" placeholder="P, M, G, GG" />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Grupo ERP</Label>
-              <Input value={p.grupoCanonico ?? ""} onChange={(e) => upd(p.id, { grupoCanonico: e.target.value.toUpperCase() })}
-                className="h-8 text-sm uppercase" placeholder="SAMBA CANCAO" />
-            </div>
-          </div>
+          <ProdutoRevendaItem key={p.id} produto={p} onChange={(patch) => upd(p.id, patch)} onDelete={() => del(p.id)} />
         ))}
       </div>
     </Card>
