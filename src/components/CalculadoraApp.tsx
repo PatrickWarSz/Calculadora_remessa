@@ -1383,6 +1383,34 @@ function ProdutosRevendaCard({ produtos, setProdutos }: { produtos: ProdutoReven
   );
 }
 
+function ProdutoRevendaItem({ produto, onChange, onDelete }: { produto: ProdutoRevenda; onChange: (patch: Partial<ProdutoRevenda>) => void; onDelete: () => void }) {
+  const [tamText, setTamText] = React.useState(produto.tamanhos.join(", "));
+  React.useEffect(() => { setTamText(produto.tamanhos.join(", ")); }, [produto.id]);
+  const commitTam = () => {
+    const arr = tamText.split(",").map((s) => s.trim()).filter(Boolean);
+    onChange({ tamanhos: arr });
+    setTamText(arr.join(", "));
+  };
+  return (
+    <div className="space-y-2 p-3 rounded-md border border-border bg-surface-2">
+      <div className="flex gap-2">
+        <Input value={produto.nome} onChange={(e) => onChange({ nome: e.target.value })} className="h-8 text-sm" />
+        <Button size="icon" variant="ghost" onClick={onDelete} className="h-8 w-8 text-destructive shrink-0"><Trash2 className="size-3.5" /></Button>
+      </div>
+      <div>
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Tamanhos</Label>
+        <Input value={tamText} onChange={(e) => setTamText(e.target.value)} onBlur={commitTam}
+          className="h-8 text-sm" placeholder="P, M, G, GG" />
+      </div>
+      <div>
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Grupo ERP</Label>
+        <Input value={produto.grupoCanonico ?? ""} onChange={(e) => onChange({ grupoCanonico: e.target.value.toUpperCase() })}
+          className="h-8 text-sm uppercase" placeholder="SAMBA CANCAO" />
+      </div>
+    </div>
+  );
+}
+
 function MapeamentoCard({ data, update }: { data: AppData; update: (p: Partial<AppData>) => void }) {
   const todosProds = [
     ...data.produtos.map((p) => ({ id: p.id, nome: p.nome, tipo: "Próprio" })),
