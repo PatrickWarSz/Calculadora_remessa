@@ -930,13 +930,16 @@ function Revenda({
         )}
       </Card>
 
-      {baseFech && proporcoesUsadas.length > 0 && (
+      <VendidoVsPego data={data} mes={mes} acumulado={acumulado} />
+
+      {data.produtosRevenda.length > 0 && (
         <NovaNotaForm
           data={data}
           update={update}
           mes={mes}
           baseMes={baseMes}
-          proporcoes={proporcoesUsadas}
+          proporcoes={proporcoes}
+          acumulado={acumulado}
         />
       )}
 
@@ -996,23 +999,35 @@ function Revenda({
 }
 
 function NovaNotaForm({
-  data, update, mes, baseMes, proporcoes,
+  data, update, mes, baseMes, proporcoes, acumulado,
 }: {
   data: AppData; update: (p: Partial<AppData>) => void; mes: string; baseMes: string;
   proporcoes: { produto: ProdutoRevenda; prop: { empresaId: string; qtd: number; pct: number }[] }[];
+  acumulado: Record<string, Record<string, Record<string, number>>>;
 }) {
   const [produtoId, setProdutoId] = useState<string>(proporcoes[0]?.produto.id ?? "");
   const [dataNota, setDataNota] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [tamQtds, setTamQtds] = useState<Record<string, string>>({});
+  const [manualQtds, setManualQtds] = useState<Record<string, Record<string, string>>>({});
   const [obs, setObs] = useState("");
 
-  useEffect(() => { setTamQtds({}); }, [produtoId]);
+  useEffect(() => { setTamQtds({}); setManualQtds({}); }, [produtoId]);
 
   const produtoSel = proporcoes.find((p) => p.produto.id === produtoId);
+  const modoManual = !!produtoSel && produtoSel.prop.length === 0;
 
   const previa = useMemo(() => {
     if (!produtoSel) return null;
     const dist: Record<string, Record<string, number>> = {};
+    if (modoManual) {
+      for (const [eid, tams] of Object.entries(manualQtds)) {
+        for (const [t, v] of Object.entries(tams)) {
+          const n = parseInt((v ?? "").replace(/\D/g, ""), 10) || 0;
+          if (n > 0) (dist[eid] ??= {})[t] = n;
+        }
+      }
+      return dist;
+    }
     for (const t of produtoSel.produto.tamanhos) {
       const totalT = parseInt((tamQtds[t] ?? "").replace(/\D/g, ""), 10) || 0;
       if (totalT === 0) continue;
@@ -1023,17 +1038,52 @@ function NovaNotaForm({
       }
     }
     return dist;
-  }, [tamQtds, produtoSel]);
+  }, [tamQtds, manualQtds, produtoSel, modoManual]);
 
-  const totalPecas = Object.values(tamQtds).reduce((s, v) => s + (parseInt((v ?? "").replace(/\D/g, ""), 10) || 0), 0);
+  const totalPecas = useMemo(() => {
+    if (modoManual) {
+      let s = 0;
+      for (const tams of Object.values(manualQtds))
+        for (const v of Object.values(tams)) s += parseInt((v ?? "").replace(/\D/g, ""), 10) || 0;
+      return s;
+    }
+    return Object.values(tamQtds).reduce((s, v) => s + (parseInt((v ?? "").replace(/\D/g, ""), 10) || 0), 0);
+  }, [tamQtds, manualQtds, modoManual]);
+
+  // alerta de faltas do produto selecionado no mês ativo
+  const alertaFaltas = useMemo(() => {
+    if (!produtoSel) return [] as { empresaId: string; faltas: { t: string; n: number }[] }[];
+    const vendasMes = data.fechamentos[mes]?.vendas ?? {};
+    const acumProd = acumulado[produtoSel.produto.id] ?? {};
+    const out: { empresaId: string; faltas: { t: string; n: number }[] }[] = [];
+    for (const e of data.empresas) {
+      const vendaTams = vendasMes[e.id]?.[produtoSel.produto.id]?.porTamanho ?? {};
+      const pegoTams = acumProd[e.id] ?? {};
+      const faltas: { t: string; n: number }[] = [];
+      for (const t of produtoSel.produto.tamanhos) {
+        const diff = (vendaTams[t] ?? 0) - (pegoTams[t] ?? 0);
+        if (diff > 0) faltas.push({ t, n: diff });
+      }
+      if (faltas.length > 0) out.push({ empresaId: e.id, faltas });
+    }
+    return out;
+  }, [produtoSel, data.fechamentos, data.empresas, acumulado, mes]);
 
   const salvar = () => {
     if (!produtoSel) return;
     if (totalPecas === 0) { toast.error("Informe ao menos um tamanho"); return; }
     const porTamanho: Record<string, number> = {};
-    for (const t of produtoSel.produto.tamanhos) {
-      const v = parseInt((tamQtds[t] ?? "").replace(/\D/g, ""), 10) || 0;
-      if (v > 0) porTamanho[t] = v;
+    if (modoManual) {
+      for (const tams of Object.values(manualQtds))
+        for (const [t, v] of Object.entries(tams)) {
+          const n = parseInt((v ?? "").replace(/\D/g, ""), 10) || 0;
+          if (n > 0) porTamanho[t] = (porTamanho[t] ?? 0) + n;
+        }
+    } else {
+      for (const t of produtoSel.produto.tamanhos) {
+        const v = parseInt((tamQtds[t] ?? "").replace(/\D/g, ""), 10) || 0;
+        if (v > 0) porTamanho[t] = v;
+      }
     }
     const nova: NotaRevenda = {
       id: newId(),
@@ -1041,12 +1091,12 @@ function NovaNotaForm({
       data: dataNota,
       produtoId: produtoSel.produto.id,
       porTamanho,
-      baseMes,
+      baseMes: modoManual ? "manual" : baseMes,
       distribuicao: previa ?? {},
       observacao: obs.trim() || undefined,
     };
     update({ notasRevenda: [nova, ...data.notasRevenda] });
-    setTamQtds({}); setObs("");
+    setTamQtds({}); setManualQtds({}); setObs("");
     toast.success("Nota registrada");
   };
 
@@ -1061,7 +1111,11 @@ function NovaNotaForm({
           <Select value={produtoId} onValueChange={setProdutoId}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {proporcoes.map((p) => <SelectItem key={p.produto.id} value={p.produto.id}>{p.produto.nome}</SelectItem>)}
+              {proporcoes.map((p) => (
+                <SelectItem key={p.produto.id} value={p.produto.id}>
+                  {p.produto.nome}{p.prop.length === 0 ? " (manual)" : ""}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1075,22 +1129,88 @@ function NovaNotaForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
-        {produtoSel.produto.tamanhos.map((t) => (
-          <div key={t}>
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t}</Label>
-            <Input
-              inputMode="numeric"
-              value={tamQtds[t] ?? ""}
-              onChange={(e) => setTamQtds((s) => ({ ...s, [t]: e.target.value.replace(/\D/g, "") }))}
-              placeholder="0"
-              className="h-9 num text-right"
-            />
-          </div>
-        ))}
-      </div>
+      {modoManual && (
+        <div className="rounded-md border border-warning/40 bg-warning/5 p-3 mb-3 text-xs">
+          Sem histórico de vendas de <strong>{produtoSel.produto.nome}</strong> em {baseMes}. Distribuindo manualmente entre as empresas.
+        </div>
+      )}
 
-      {totalPecas > 0 && previa && (
+      {alertaFaltas.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 mb-3 text-xs space-y-0.5">
+          <p className="font-medium mb-1">Faltas no mês {mes} (vendido &gt; pego):</p>
+          {alertaFaltas.map((f) => (
+            <p key={f.empresaId}>
+              <strong>{data.empresas.find((e) => e.id === f.empresaId)?.nome}:</strong>{" "}
+              {f.faltas.map((x) => `${x.t} ${fmtInt(x.n)}`).join(" · ")}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {!modoManual ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
+          {produtoSel.produto.tamanhos.map((t) => (
+            <div key={t}>
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t}</Label>
+              <Input
+                inputMode="numeric"
+                value={tamQtds[t] ?? ""}
+                onChange={(e) => setTamQtds((s) => ({ ...s, [t]: e.target.value.replace(/\D/g, "") }))}
+                placeholder="0"
+                className="h-9 num text-right"
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto mb-3">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-surface-2">
+                <th className="text-left px-2 py-1 border-b border-border">Empresa</th>
+                {produtoSel.produto.tamanhos.map((t) => (
+                  <th key={t} className="px-2 py-1 border-b border-border text-right">{t}</th>
+                ))}
+                <th className="px-2 py-1 border-b border-border text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.empresas.map((e) => {
+                const row = manualQtds[e.id] ?? {};
+                const totalRow = produtoSel.produto.tamanhos.reduce(
+                  (s, t) => s + (parseInt((row[t] ?? "").replace(/\D/g, ""), 10) || 0), 0,
+                );
+                return (
+                  <tr key={e.id}>
+                    <td className="px-2 py-1 border-b border-border">{e.nome}</td>
+                    {produtoSel.produto.tamanhos.map((t) => (
+                      <td key={t} className="px-1 py-1 border-b border-border">
+                        <Input
+                          inputMode="numeric"
+                          value={row[t] ?? ""}
+                          onChange={(ev) =>
+                            setManualQtds((s) => ({
+                              ...s,
+                              [e.id]: { ...(s[e.id] ?? {}), [t]: ev.target.value.replace(/\D/g, "") },
+                            }))
+                          }
+                          placeholder="0"
+                          className="h-8 num text-right"
+                        />
+                      </td>
+                    ))}
+                    <td className="px-2 py-1 border-b border-border num text-right font-semibold">
+                      {totalRow > 0 ? fmtInt(totalRow) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {totalPecas > 0 && previa && !modoManual && (
         <div className="rounded-md border border-border bg-surface-2 p-3 mb-3">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
             Distribuição prévia · base {baseMes} · {fmtInt(totalPecas)} peças
@@ -1127,6 +1247,88 @@ function NovaNotaForm({
         <Button onClick={salvar} disabled={totalPecas === 0}>
           <Plus className="size-3.5 mr-1.5" /> Registrar nota
         </Button>
+      </div>
+    </Card>
+  );
+}
+
+function VendidoVsPego({
+  data, mes, acumulado,
+}: {
+  data: AppData; mes: string;
+  acumulado: Record<string, Record<string, Record<string, number>>>;
+}) {
+  const fech = data.fechamentos[mes];
+  const linhas = useMemo(() => {
+    return data.produtosRevenda.map((p) => {
+      const rows = data.empresas.map((e) => {
+        const vendaTams = fech?.vendas?.[e.id]?.[p.id]?.porTamanho ?? {};
+        const pegoTams = acumulado[p.id]?.[e.id] ?? {};
+        const porTam = p.tamanhos.map((t) => {
+          const v = vendaTams[t] ?? 0;
+          const g = pegoTams[t] ?? 0;
+          return { t, v, g, s: g - v };
+        });
+        const tv = porTam.reduce((s, x) => s + x.v, 0);
+        const tg = porTam.reduce((s, x) => s + x.g, 0);
+        return { empresaId: e.id, porTam, tv, tg, ts: tg - tv };
+      }).filter((r) => r.tv > 0 || r.tg > 0);
+      return { produto: p, rows };
+    }).filter((x) => x.rows.length > 0);
+  }, [data.produtosRevenda, data.empresas, fech, acumulado]);
+
+  if (linhas.length === 0) return null;
+
+  const cellCls = (s: number) =>
+    s < 0 ? "text-destructive font-medium" : s > 0 ? "text-success" : "text-muted-foreground";
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-sm">Vendido × Pego · mês {mes}</h3>
+        <p className="text-[11px] text-muted-foreground">saldo = pego − vendido</p>
+      </div>
+      <div className="space-y-5">
+        {linhas.map(({ produto, rows }) => (
+          <div key={produto.id}>
+            <p className="text-sm font-medium mb-1">{produto.nome}</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-surface-2">
+                    <th className="text-left px-2 py-1 border-b border-border">Empresa</th>
+                    {produto.tamanhos.map((t) => (
+                      <th key={t} className="px-2 py-1 border-b border-border text-right" colSpan={1}>{t}</th>
+                    ))}
+                    <th className="px-2 py-1 border-b border-border text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.empresaId} className="align-top">
+                      <td className="px-2 py-1 border-b border-border">
+                        {data.empresas.find((e) => e.id === r.empresaId)?.nome}
+                      </td>
+                      {r.porTam.map((x) => (
+                        <td key={x.t} className="px-2 py-1 border-b border-border num text-right">
+                          <div className="text-muted-foreground">{x.v ? fmtInt(x.v) : "—"} / {x.g ? fmtInt(x.g) : "—"}</div>
+                          <div className={cellCls(x.s)}>{x.s > 0 ? `+${fmtInt(x.s)}` : x.s < 0 ? fmtInt(x.s) : "0"}</div>
+                        </td>
+                      ))}
+                      <td className="px-2 py-1 border-b border-border num text-right">
+                        <div className="text-muted-foreground">{fmtInt(r.tv)} / {fmtInt(r.tg)}</div>
+                        <div className={cellCls(r.ts) + " font-semibold"}>
+                          {r.ts > 0 ? `+${fmtInt(r.ts)}` : fmtInt(r.ts)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-muted-foreground mt-1">Cada célula: vendido / pego · saldo</p>
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   );
